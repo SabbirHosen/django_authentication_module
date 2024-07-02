@@ -1,8 +1,8 @@
 
 
-# CHATINIT Backend Django Project
+# Backend Django Project Only Authentication
 
-This project is a Django-based web application using Django Rest Framework (DRF).
+This project is a Django-based web application using Django Rest Framework (DRF) for authentication using jwt with email verification.
 
 ## Running the Project with Docker
 
