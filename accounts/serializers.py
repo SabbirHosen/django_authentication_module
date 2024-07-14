@@ -8,6 +8,7 @@ from django.utils.encoding import force_bytes
 from django.template.loader import render_to_string
 from django.contrib.sites.shortcuts import get_current_site
 from accounts.tokens import account_activation_token
+from accounts.models import OTP
 
 User = get_user_model()
 
@@ -20,26 +21,31 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user = User.objects.create_user(**validated_data)
+        is_email_verification_mandatory = getattr(settings, 'ACCOUNT_EMAIL_VERIFICATION', 'optional')
 
-        if settings.ACCOUNT_EMAIL_VERIFICATION == 'mandatory':
+        if is_email_verification_mandatory == "mandatory":
             user.is_active = False
-            current_site = get_current_site(self.context['request'])
-            mail_subject = 'Activate your account.'
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = account_activation_token.make_token(user)
-            # activation_link = reverse('activate', kwargs={'uidb64': uid, 'token': token})
-            # activate_url = f'http://{current_site.domain}{activation_link}'
-            # print(uid, type(uid), token, type(token))
-            message = render_to_string('accounts/activation_email.html', {
-                'user': user,
-                'domain': current_site.domain,
-                'uid': uid,
-                'token': token,
-            })
-            send_mail(mail_subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
-        user.save()
+            user.save()
+            self.send_activation_email(user)
+        else:
+            user.is_active = True
+            user.save()
 
         return user
+
+    def send_activation_email(self, user):
+        current_site = get_current_site(self.context['request'])
+        mail_subject = 'Activate your account.'
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = account_activation_token.make_token(user)
+        message = render_to_string('accounts/activation_email.html', {
+            'user': user,
+            'domain': current_site.domain,
+            'uid': uid,
+            'token': token,
+            'protocol': 'http',
+        })
+        send_mail(mail_subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
 
 
 class ResendActivationEmailSerializer(serializers.Serializer):
@@ -111,3 +117,26 @@ class LogoutSerializer(serializers.Serializer):
 class PasswordChangeSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     password_confirm = serializers.CharField(write_only=True)
+
+
+class OTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6)
+
+    def validate(self, data):
+        try:
+            otp_instance = OTP.objects.get(user__email=data['email'])
+        except OTP.DoesNotExist:
+            raise serializers.ValidationError("Invalid email or OTP.")
+
+        if not otp_instance.is_valid():
+            raise serializers.ValidationError("OTP has expired.")
+
+        if otp_instance.otp != data['otp']:
+            raise serializers.ValidationError("Invalid OTP.")
+
+        return data
+
+
+class SendOTPSerializer(serializers.Serializer):
+    email = serializers.EmailField()

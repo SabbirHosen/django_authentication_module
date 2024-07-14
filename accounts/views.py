@@ -1,3 +1,5 @@
+from django.utils import timezone
+from django.core.mail import send_mail
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -10,10 +12,12 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 
+import pyotp
+
 from accounts.tokens import account_activation_token
-from .models import CustomUser
-from .serializers import CustomUserSerializer, LogoutSerializer, ResendActivationEmailSerializer, \
-    PasswordResetSerializer, PasswordChangeSerializer
+from accounts.models import OTP
+from accounts.serializers import CustomUserSerializer, LogoutSerializer, ResendActivationEmailSerializer, \
+    PasswordResetSerializer, PasswordChangeSerializer, OTPSerializer, SendOTPSerializer
 
 User = get_user_model()
 
@@ -143,3 +147,72 @@ class PasswordResetConfirmView(APIView):
                 return Response({'status': 'passwords do not match'}, status=status.HTTP_400_BAD_REQUEST)
         else:
             return Response({'status': 'reset link is invalid'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class SendOTPView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = SendOTPSerializer
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        otp_code = pyotp.TOTP(pyotp.random_base32()).now()
+        OTP.objects.update_or_create(user=user, defaults={'otp': otp_code, 'created_at': timezone.now()})
+
+        send_mail(
+            'Your OTP Code',
+            f'Your OTP code is {otp_code}. It is valid for 5 minutes.',
+            'from@example.com',
+            [email],
+            fail_silently=False,
+        )
+
+        return Response({"message": "OTP sent"}, status=status.HTTP_200_OK)
+
+
+class VerifyOTPView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = OTPSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = User.objects.get(email=serializer.validated_data['email'])
+        user.is_active = True
+        user.is_email_verified = True
+        user.save()
+        return Response({"message": "Account activated"}, status=status.HTTP_200_OK)
+
+
+class ResendOTPView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = SendOTPSerializer
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get('email')
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        otp_instance = OTP.objects.filter(user=user).first()
+        if otp_instance and otp_instance.is_valid():
+            return Response({"message": "An OTP has already been sent. Please wait before requesting a new one."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        otp_code = pyotp.TOTP(pyotp.random_base32()).now()
+        OTP.objects.update_or_create(user=user, defaults={'otp': otp_code, 'created_at': timezone.now()})
+
+        send_mail(
+            'Your OTP Code',
+            f'Your OTP code is {otp_code}. It is valid for 5 minutes.',
+            'from@example.com',
+            [email],
+            fail_silently=False,
+        )
+
+        return Response({"message": "New OTP sent"}, status=status.HTTP_200_OK)
