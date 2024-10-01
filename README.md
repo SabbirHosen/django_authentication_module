@@ -2,7 +2,7 @@
 
 # Backend Django Project Only Authentication
 
-This project is a Django-based web application using Django Rest Framework (DRF) for authentication using jwt with email verification.
+This project is a Django-based web application using Django Rest Framework (DRF) for portfolio creation.
 
 ## Running the Project with Docker
 
@@ -15,8 +15,8 @@ This project is a Django-based web application using Django Rest Framework (DRF)
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/yourproject.git
-   cd chatinit_backend
+   git clone https://github.com/SabbirHosen/Portfolio_Django_API.git
+   cd Portfolio_Django_API
    ```
 
 2. Build and start the Docker containers:
@@ -83,9 +83,17 @@ DATABASE_USER=myprojectuser
 DATABASE_PASSWORD=myprojectpassword
 DATABASE_HOST=db
 DATABASE_PORT=5432
+
 SECRET_KEY=your_secret_key
 DEBUG=True
-```
+
+#Email configuration variables
+EMAIL_HOST=
+EMAIL_PORT=
+EMAIL_USE_TLS=
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+DEFAULT_FROM_EMAIL=
 ```
 
 By following these instructions, you will have a fully functional Django project that can be run using Docker for containerized deployment or using a virtual environment for local development.

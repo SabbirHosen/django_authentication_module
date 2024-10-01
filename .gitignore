@@ -55,8 +55,8 @@ local_settings.py
 .env
 
 # Django Migrations
-**/migrations/*
-!**/migrations/__init__.py
+#**/migrations/*
+#!**/migrations/__init__.py
 
 # VS Code
 .vscode/
